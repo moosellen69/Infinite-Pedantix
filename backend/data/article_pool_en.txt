@@ -1,0 +1,53 @@
+United States
+United Kingdom
+Canada
+Australia
+Germany
+France
+Italy
+Spain
+Japan
+China
+India
+Brazil
+Russia
+Mexico
+South Korea
+Argentina
+Egypt
+South Africa
+Turkey
+Saudi Arabia
+New York City
+London
+Paris
+Tokyo
+Sydney
+Toronto
+Berlin
+Rome
+Madrid
+Beijing
+Mumbai
+São Paulo
+Moscow
+Cairo
+Dubai
+Singapore
+Hong Kong
+Barcelona
+Amsterdam
+Vienna
+Prague
+Budapest
+Warsaw
+Athens
+Istanbul
+Seoul
+Bangkok
+Mexico City
+Buenos Aires
+Cape Town
+Lagos
+Jakarta
+Manila

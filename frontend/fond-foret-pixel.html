@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pedantix – fond forêt pixel art</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    font-family: 'VT323', monospace;
+    color: #2a1e14;
+  }
+
+  /* ====== LE FOND (à copier dans ton projet) ====== */
+  html {
+    background-color: #8fc24a;
+    background-attachment: fixed;
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+  body { background: transparent !important; }
+  /* Le texte, lui, ne doit pas être pixelisé */
+  body * { image-rendering: auto; }
+
+  /* ====== Démo : panneau d'exemple, à ignorer ====== */
+  .panel {
+    max-width: 620px;
+    margin: 24vh auto 60px;
+    padding: 24px 28px;
+    background: #e8d8a8;
+    box-shadow:
+      0 -4px 0 #1f2a2a, 0 4px 0 #1f2a2a,
+      -4px 0 0 #1f2a2a, 4px 0 0 #1f2a2a,
+      inset 0 -4px 0 #c8a070,
+      10px 10px 0 rgba(20, 40, 25, .45);
+  }
+  @media (max-width: 680px) { .panel { margin: 20vh 16px 40px; } }
+  h1 {
+    font-family: 'Press Start 2P', monospace;
+    font-size: clamp(20px, 5vw, 30px);
+    margin: 0 0 18px;
+    color: #e0702c;
+    text-shadow: 3px 3px 0 #1f2a2a;
+  }
+  p { font-size: 24px; line-height: 1.35; margin: 0 0 18px; }
+  .hid {
+    display: inline-block;
+    height: .8em;
+    vertical-align: -0.05em;
+    background: #5a6b7d;
+    box-shadow: inset 2px 2px 0 #8596a8, inset -2px -2px 0 #3d4a5c;
+  }
+  button {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 12px;
+    padding: 12px 16px;
+    border: 0;
+    background: #c8402c;
+    color: #fff5e0;
+    cursor: pointer;
+    box-shadow: 0 -3px 0 #1f2a2a, 0 3px 0 #1f2a2a, -3px 0 0 #1f2a2a, 3px 0 0 #1f2a2a, 5px 5px 0 #1f2a2a;
+  }
+  button:active { transform: translate(3px, 3px); box-shadow: 0 -3px 0 #1f2a2a, 0 3px 0 #1f2a2a, -3px 0 0 #1f2a2a, 3px 0 0 #1f2a2a; }
+  button:focus-visible { outline: 3px dashed #f5e98a; outline-offset: 6px; }
+</style>
+</head>
+<body>
+
+<main class="panel">
+  <h1>Pedantix</h1>
+  <p>
+    Le <span class="hid" style="width:5ch"></span> est un <span class="hid" style="width:7ch"></span>
+    situé dans les <span class="hid" style="width:4ch"></span> suisses, à proximité du lac
+    <span class="hid" style="width:6ch"></span>.
+  </p>
+  <button id="regen">Nouvelle forêt</button>
+</main>
+
+<script>
+/* =========================================================
+   Fond forêt pixel art — drawForest(canvas, { scale, seed, band })
+   scale : taille d'un "pixel" en px écran (3 à 6 conseillé)
+   seed  : graine, même graine = même forêt
+   band  : hauteur de la bande de forêt en haut (0.2 = 20 %)
+   ========================================================= */
+(function () {
+  const PAL = {
+    grass: '#8fc24a', grassLight: '#a4d25a', grassDark: '#6fa83c',
+    grassShadow: '#5f9638', sandShadow: '#d2bf62',
+    patch: '#b0da68', sand: '#f5e98a', sandEdge: '#e6d470',
+    deep: '#24503a',
+    trunk: '#7a5230', trunkOut: '#3a2618',
+    white: '#f6f6ea', yellow: '#ffd84a', orange: '#f0902c', red: '#d8502c'
+  };
+  const LEAF  = { out: '#1f3f2c', shade: '#3f7a34', base: '#5f9e3a', hi: '#8cc84a', spark: '#b6e06a' };
+  const PINE  = { out: '#16362e', shade: '#2a5e48', base: '#3b7a58', hi: '#5a9e6c' };
+  const BUSH  = { out: '#2a5a2c', shade: '#4c8e36', base: '#6cb040', hi: '#9cd058' };
+  const ROCK  = { out: '#1f2a36', shade: '#3d4a5c', base: '#5a6b7d', hi: '#8596a8' };
+
+  const pack = h => { const n = parseInt(h.slice(1), 16);
+    return ((255 << 24) | ((n & 255) << 16) | (n & 0xff00) | ((n >> 16) & 255)) >>> 0; };
+  const packPal = p => Object.fromEntries(Object.entries(p).map(([k, v]) => [k, pack(v)]));
+
+  function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  function hash2(x, y, s) { let h = Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(s, 982451653);
+    h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16; return (h >>> 0) / 4294967296; }
+
+  function drawForest(canvas, opts = {}) {
+    const S = opts.scale || 4, seed = opts.seed ?? 7, band = opts.band ?? 0.2;
+    const W = Math.ceil(window.innerWidth / S), H = Math.ceil(window.innerHeight / S);
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    const img = ctx.createImageData(W, H);
+    const buf = new Uint32Array(img.data.buffer);
+    const C = packPal(PAL), L = packPal(LEAF), P = packPal(PINE), B = packPal(BUSH), K = packPal(ROCK);
+    const rand = mulberry32(seed);
+    const R = (a, b) => a + rand() * (b - a);
+    const inb = (x, y) => x >= 0 && y >= 0 && x < W && y < H;
+    const set = (x, y, c) => { x = Math.floor(x); y = Math.floor(y); if (inb(x, y)) buf[y * W + x] = c; };
+    const get = (x, y) => { x = Math.floor(x); y = Math.floor(y); return inb(x, y) ? buf[y * W + x] : 0; };
+    const bandY = x => H * band + Math.sin(x * 0.07 + seed) * 4 + Math.sin(x * 0.19) * 2;
+
+    /* 1. Herbe de base + texture en blocs 2x2 */
+    buf.fill(C.grass);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const n = hash2(x >> 1, y >> 1, seed);
+      if (n < 0.035) buf[y * W + x] = C.grassLight;
+      else if (n > 0.975) buf[y * W + x] = C.grassDark;
+    }
+
+    /* 2. Taches d'herbe claire et clairières de sable */
+    function patch(cx, cy, rx, ry, col, edge) {
+      for (let y = Math.floor(cy - ry - 2); y <= cy + ry + 2; y++)
+        for (let x = Math.floor(cx - rx - 2); x <= cx + rx + 2; x++) {
+          const dx = (x - cx) / rx, dy = (y - cy) / ry;
+          const d = dx * dx + dy * dy + (hash2(x >> 1, y >> 1, seed + 3) - 0.5) * 0.35;
+          if (d < 1) set(x, y, edge && d > 0.7 ? edge : col);
+        }
+    }
+    for (let i = 0; i < W * H / 4000; i++) patch(R(0, W), R(0, H), R(8, 20), R(4, 9), C.patch);
+    for (let i = 0; i < Math.max(2, W * H / 30000); i++) {
+      const cx = R(W * 0.15, W * 0.85), cy = R(H * 0.3, H * 0.95);
+      for (let j = 0; j < 3; j++) patch(cx + R(-8, 8), cy + R(-4, 4), R(6, 12), R(3, 6), C.sand, C.sandEdge);
+    }
+
+    /* 3. Fond sombre derrière la bande de forêt */
+    for (let x = 0; x < W; x++) { const b = bandY(x) - 6; for (let y = 0; y < b && y < H; y++) buf[y * W + x] = C.deep; }
+
+    /* 4. Petites touffes d'herbe */
+    const isGround = c => c === C.grass || c === C.grassLight || c === C.patch;
+    for (let i = 0; i < W * H / 90; i++) {
+      const x = Math.floor(R(0, W)), y = Math.floor(R(0, H));
+      if (!isGround(get(x, y))) continue;
+      set(x, y, C.grassDark); set(x + 1, y - 1, C.grassDark); set(x + 2, y, C.grassDark);
+      set(x + 1, y, C.grassLight);
+    }
+
+    /* 5. Placement des objets */
+    const objs = [];
+    for (let gy = -4; gy < H * band + 12; gy += 6)
+      for (let gx = -8; gx < W + 8; gx += R(8, 12)) {
+        const x = gx + R(-2, 2), y = gy + R(-2, 2);
+        if (y > bandY(x) + 2) continue;
+        objs.push({ t: rand() < 0.28 ? 'pine' : 'tree', x, y, r: R(6, 9) });
+      }
+    const sideW = Math.max(10, W * 0.1);
+    for (let gy = H * band + 6; gy < H + 24; gy += R(6, 8)) {
+      const w = sideW * (0.5 + hash2(Math.floor(gy), 1, seed) * 0.8);
+      for (let gx = -6; gx < w; gx += R(8, 11)) {
+        if (rand() < 0.85) objs.push({ t: rand() < 0.3 ? 'pine' : 'tree', x: gx + R(-2, 2), y: gy, r: R(6, 8.5) });
+        if (rand() < 0.85) objs.push({ t: rand() < 0.3 ? 'pine' : 'tree', x: W - gx + R(-2, 2), y: gy + R(-2, 2), r: R(6, 8.5) });
+      }
+    }
+    for (let i = 0; i < W * H / 3500; i++) {
+      const x = R(0, W), y = R(bandY(0) + 8, H + 4);
+      objs.push({ t: rand() < 0.75 ? 'bush' : 'rock', x, y, r: R(2.5, 4.5) });
+    }
+
+    /* 6. Ombres portées (dures, décalées vers la droite) */
+    const shade = (x, y) => {
+      const c = get(x, y);
+      if (!c || c === C.deep || c === C.grassShadow || c === C.sandShadow) return;
+      set(x, y, (c === C.sand || c === C.sandEdge) ? C.sandShadow : C.grassShadow);
+    };
+    for (const o of objs) {
+      const rx = o.t === 'tree' ? o.r * 1.1 : o.t === 'pine' ? 6 : o.r * 1.2;
+      const ry = rx * 0.42, cx = o.x + rx * 0.35, cy = o.y + 1;
+      for (let y = Math.floor(cy - ry); y <= cy + ry; y++)
+        for (let x = Math.floor(cx - rx); x <= cx + rx; x++) {
+          const dx = (x - cx) / rx, dy = (y - cy) / ry;
+          if (dx * dx + dy * dy < 1) shade(x, y);
+        }
+    }
+
+    /* 7. Fleurs (blanches et orange, en petits groupes) */
+    for (let i = 0; i < W * H / 2500; i++) {
+      const cx = R(0, W), cy = R(0, H), orange = rand() < 0.5;
+      for (let j = 0, n = 2 + Math.floor(R(0, 4)); j < n; j++) {
+        const x = Math.floor(cx + R(-6, 6)), y = Math.floor(cy + R(-4, 4));
+        if (y < bandY(x) + 2) continue;
+        const petal = orange ? C.orange : C.white;
+        set(x - 1, y, petal); set(x + 1, y, petal); set(x, y - 1, petal); set(x, y + 1, petal);
+        set(x, y, orange ? C.red : C.yellow);
+      }
+    }
+
+    /* 8. Dessin des objets, de l'arrière vers l'avant */
+    function blob(cx, cy, r, p, sq = 1) {
+      const ph = rand() * 6.28, r2 = Math.ceil(r + 1);
+      for (let dy = -r2; dy <= r2; dy++) for (let dx = -r2; dx <= r2; dx++) {
+        const ey = dy / sq, d = Math.hypot(dx, ey);
+        const rr = r * (1 + 0.09 * Math.sin(Math.atan2(ey, dx) * 5 + ph));
+        if (d > rr) continue;
+        const x = Math.floor(cx + dx), y = Math.floor(cy + dy);
+        let c;
+        if (d > rr - 1.1) c = p.out;
+        else {
+          const l = (-dx * 0.55 - ey * 0.85) / r + (((x + y) & 1) ? 0.07 : -0.07);
+          c = l > 0.42 ? p.hi : l < -0.3 ? p.shade : p.base;
+          if (c === p.base && hash2(x, y, seed + 9) < 0.06) c = p.hi;
+          if (p.spark && l > 0.62 && hash2(x, y, seed + 5) < 0.3) c = p.spark;
+        }
+        set(x, y, c);
+      }
+    }
+    function trunk(x, y, h) {
+      for (let t = -h; t <= 0; t++) {
+        set(x - 2, y + t, C.trunkOut); set(x - 1, y + t, C.trunk);
+        set(x, y + t, C.trunk); set(x + 1, y + t, C.trunkOut);
+      }
+      set(x - 1, y + 1, C.trunkOut); set(x, y + 1, C.trunkOut);
+    }
+    function tree(x, y, r) {
+      trunk(x, y, 3);
+      blob(x, y - 3 - r * 0.75, r, L);
+      blob(x, y - 3 - r * 1.45, r * 0.75, L);
+      blob(x, y - 3 - r * 1.95, r * 0.45, L);
+    }
+    function pine(x, y, r) {
+      trunk(x, y, 2);
+      const Ht = r * 2.6, tiers = 3;
+      for (let i = tiers - 1; i >= 0; i--) {
+        const top = y - 2 - Ht + i * Ht * 0.27, th = Math.floor(Ht * 0.42), hw = 2.5 + i * 1.8 * (r / 7);
+        for (let row = 0; row <= th; row++) {
+          const half = 0.5 + (row / th) * hw;
+          for (let dx = -Math.ceil(half); dx <= Math.ceil(half); dx++) {
+            if (Math.abs(dx) > half) continue;
+            const px = x + dx, py = Math.floor(top + row);
+            let c;
+            if (Math.abs(dx) > half - 1 || row === th || row === 0) c = P.out;
+            else {
+              const l = -dx / half + (((px + py) & 1) ? 0.12 : -0.12);
+              c = l > 0.3 ? P.hi : l < -0.4 ? P.shade : P.base;
+            }
+            set(px, py, c);
+          }
+        }
+      }
+    }
+    objs.sort((a, b) => a.y - b.y);
+    for (const o of objs) {
+      const x = Math.floor(o.x), y = Math.floor(o.y);
+      if (o.t === 'tree') tree(x, y, o.r);
+      else if (o.t === 'pine') pine(x, y, o.r);
+      else if (o.t === 'bush') { blob(x - o.r * 0.5, y - o.r * 0.6, o.r, B, 0.8); blob(x + o.r * 0.6, y - o.r * 0.5, o.r * 0.8, B, 0.8); }
+      else blob(x, y - 1, o.r * 0.8, K, 0.7);
+    }
+
+    ctx.putImageData(img, 0, 0);
+  }
+
+  window.drawForest = drawForest;
+})();
+
+/* ====== Initialisation ====== */
+const forestCanvas = document.createElement('canvas'); // hors écran, jamais ajouté à la page
+let forestSeed = 7;
+function render() {
+  drawForest(forestCanvas, { scale: 4, seed: forestSeed, band: 0.2 });
+  document.documentElement.style.backgroundImage = 'url(' + forestCanvas.toDataURL() + ')';
+}
+render();
+let resizeTimer;
+window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(render, 150); });
+
+/* Démo : bouton pour tester d'autres graines */
+document.getElementById('regen').addEventListener('click', () => { forestSeed = Math.floor(Math.random() * 1e6); render(); });
+</script>
+</body>
+</html>
